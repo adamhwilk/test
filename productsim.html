@@ -1,0 +1,462 @@
+<!doctype html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Product Startup Sim</title>
+    <style>
+      * { padding: 10; margin: 10; }
+      canvas { background: #eee; display: block; margin: 0 auto; }
+    </style>
+  </head>
+
+  <body>
+    
+  
+    
+    <canvas id="myCanvas" width ="320" height="568"></canvas>
+    
+    <script type='text/javascript' src= "externalfile:drive-eff370bfbf8d1098be1d2fd8fed4a17105e1d484/root/java/Project1/productsim/eventLibrary.js"></script>
+    <script type='text/javascript' src= "externalfile:drive-eff370bfbf8d1098be1d2fd8fed4a17105e1d484/root/java/Project1/productsim/processLibrary.js"></script>
+    
+    <script>
+  
+  // this is a text driven simulation game about entrepreneurship
+  //
+  // you have three resources: bucks, hours, and customers.
+  //
+  // the game is a side-scroller, where your character is always walking forward. but he gets tired.
+  // at the end of each "day", the game sends X customers in to your store, and your conversion rate produces Y bucks. You then use those bucks to build up.
+  // each "day" is a CHOICE of two options. You can only pick one, and then you are redealt more.
+  // You can keep working harder and harder, and getting more anxious, or you can work less and coast.
+  // you play until you go bankrupt, or get too sad to continue, or run out of customers.
+  //
+  // the lower energy you are, the more likely bad things will happen. the higher energy, the more likely good things will happen.
+  //
+  // the goal of the game is to facilitate discussion on the impacts of the day to day on merchants
+  // its supposed to be a quick way for someone to do a day-in-the-life
+  //
+  //
+  
+    // initialize the canvas, myCanvas
+    
+    var canvas = document.getElementById("myCanvas");
+    var ctx = canvas.getContext("2d"); // this is the actual 2d rendering tool
+    
+    // global variables
+    var choiceIndex = 0; choice1ID = 0; choice2ID = 1;
+    var heroX =70, heroY =320; goToX =70, goToY=320;
+    var timer =0, clickDelay=0, clickTime = 0, nextTimer=0; choice=0
+    var gameStateID=0, waitForClick=0
+
+    // gameStats is the object that holds player data
+    var gameStats = {
+      bucks: 0,
+      energy: 2,
+      traffic: 0,
+      conversion: 1,
+      level: 1,
+      decisioncount:3,
+      gameState: 0, // 0 is on loadup, 1 is start of round, 2 is end of round, 3 is cleanup
+      };
+    
+    // listeners for user input depending which inputs i add
+    
+    document.addEventListener("mousemove", function(event) {
+      // just watches mouse movement
+        relativeX = event.clientX - myCanvas.offsetLeft;
+        relativeY = event.clientY - myCanvas.offsetTop;
+        //var relativeY = e.clientY - canvasoffsetTop;
+    }, false);
+    
+    document.addEventListener("click",function(event) {
+      
+      var clickX = Math.floor(relativeX)
+      var clickY = Math.floor(relativeY)
+      var clickTime = timer
+      var click = 0
+      
+      // this just places their click on a screen and converts it to an integer
+      
+      if (clickY<165) { // option 1
+        click=1;
+        choiceIndex+=6;
+      } else if (clickY<340 && clickY>180) { // option 2
+        click=2;
+        choiceIndex+=6;
+      } else {
+        click=3; // aywhere else
+      }
+      mySound.stop()
+      mySound.play()
+      myMusic.play()
+      waitForClick = 1;
+      choice=click
+      
+    }, false);
+  
+  //load images / resources -- move to a library
+    
+   var heroImage = new Image();
+   var directoryimg = "externalfile:drive-eff370bfbf8d1098be1d2fd8fed4a17105e1d484/root/java/Project1/productsim/img/"
+   heroImage.src = directoryimg+"charset1.png"
+  
+  function delay(options) {
+      
+      var that = {}
+        that.maxFrames = options.maxFrames
+        tickCount = 0
+        
+          that.update = function(){
+            tickCount += 1;
+            var percentage = tickCount/that.maxFrames;
+            console.log(percentage);
+               if (tickCount > that.maxFrames) {
+          	    tickCount = 0;
+               }
+        }
+        
+        return that;
+  }
+  
+  
+  //console.log(pause1)
+  
+  function sprite(options) {
+      
+      var that = {}
+      
+        frameIndex = 0,
+        tickCount = 0,
+        movementtickCount=0,
+        ticksPerFrame = options.ticksPerFrame || 0;
+        ticksPerFrameMovement = options.ticksPerFrameMovement || 0;
+        numberOfFrames = options.numberOfFrames || 1;
+        
+        that.context = options.context;
+        that.width = options.width;
+        that.height = options.height;
+        that.realwidth = options.realwidth;
+        that.realheight = options.realheight;
+        that.image = options.image;
+        that.loop = options.loop;
+        that.xpos = options.xpos;
+        that.ypos = options.ypos;
+        that.xorigin = options.xorigin;
+        that.yorigin = options.yorigin;
+        that.movementtickCount = 0
+        that.speed = options.speed
+        
+      that.refresh = function(){
+          that.xorigin = that.xpos
+          that.yorigin = that.ypos
+          that.movementtickCount=0
+      }
+        
+      that.update = function() {
+        tickCount += 1;
+        that.movementtickCount +=that.speed;
+        var percentage = that.movementtickCount/ticksPerFrameMovement;
+        
+        that.xpos = interpolate(that.xorigin,goToX,that.movementtickCount/ticksPerFrameMovement);
+        that.ypos = interpolate(that.yorigin,goToY,that.movementtickCount/ticksPerFrameMovement);
+        
+        
+        if (that.movementtickCount > ticksPerFrameMovement) {
+            that.refresh()
+            that.movementtickCount = 0;
+            
+          }
+        
+        if (tickCount > ticksPerFrame) {
+          	tickCount = 0;
+              
+              if (frameIndex <numberOfFrames-1) {
+                frameIndex += 1;
+              } else if (that.loop) {
+                frameIndex = 0;
+              }
+            
+          }
+        
+      }
+      
+      that.render = function() {
+            //draw the graphic
+                ctx.imageSmoothingEnabled = false;
+                that.context.drawImage(
+                that.image,
+                frameIndex*that.width,
+                0,
+                that.width,
+                that.height,
+                that.xpos,
+                that.ypos,
+                that.realwidth,
+                that.realheight);
+                
+      };
+   
+   return that;
+   
+  }
+
+  // variables for draws
+  // each stores as an object
+  
+  var hero = sprite({
+    context: canvas.getContext("2d"),
+    width: 50,
+    height: 50,
+    xpos: 0,
+    ypos: 0,
+    xorigin:-300,
+    yorigin: goToY,
+    realwidth: 200,
+    realheight: 200,
+    image: heroImage,
+    ticksPerFrame: 20,
+    ticksPerFrameMovement:60,
+    movementtickCount: 0,
+    numberOfFrames: 6,
+    loop: 1,
+    speed: .25,
+    });
+   
+  
+  function drawScore() {
+    var  scoreHeight=50; scoreYoffset = canvas.height-scoreHeight;
+    // draw the score bar at the bottom of the screen
+    //outside rectangle with fill
+      ctx.fillStyle = "black";
+      ctx.fillRect(0,scoreYoffset,canvas.width,scoreHeight);
+      ctx.lineWidth=1;
+      ctx.strokeStyle="white";
+      ctx.strokeRect(0,scoreYoffset,canvas.width,scoreHeight);
+      ctx.stroke();
+      ctx.strokeStyle="black";
+    
+    
+      ctx.font="11pt courier"
+      ctx.fillStyle = "white";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      ctx.fillText("Bucks:"+gameStats.bucks+ " | Energy:"+gameStats.energy+" | Traffic:"+gameStats.traffic, canvas.width/2, scoreYoffset+scoreHeight/2);
+      ctx.stroke();
+  }
+  
+  function drawBox(xorigin,yorigin,cardindex) {
+  
+      var c=document.getElementById("myCanvas");
+      var ctx=c.getContext("2d");
+      var choiceIndex=cardindex*6
+      ctx.imageSmoothingEnabled = false;
+      var boxWidth = 280, boxHeight = 155;
+      var messageFont="22px Helvetica"; messageBodyFont="14px Helvetica"; messageTitle=choiceCards[choiceIndex];
+      var messageHeight =14*1.5
+      var ybuffer=0
+      
+      
+      //outside rectangle with fill
+      ctx.fillStyle = "#5A9BDC";
+      ctx.fillRect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=1;
+      ctx.stroke();
+      
+      //outside border
+      ctx.fillStyle = "black";
+      ctx.rect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=3;
+      ctx.stroke();
+      
+      
+      // text title
+      ctx.font=messageFont
+      ctx.fillStyle = "black";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(messageTitle, xorigin+boxWidth/2-2, yorigin+boxHeight/5+1);
+      ctx.fillStyle = "white";
+      ctx.fillText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.stroke();
+      
+      // cost here
+      ctx.font="12px courier"
+      ctx.fillStyle = "grey";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(choiceCards[choiceIndex+5], xorigin+boxWidth/2-1, yorigin+boxHeight/3);
+      ctx.fillStyle = "red";
+      ctx.fillText(choiceCards[choiceIndex+5], xorigin+boxWidth/2, yorigin+boxHeight/3);
+      
+      
+      // since ctx text doesnt let us do line breaks easily,
+      // were just going to push each line of text seperately from our array
+      // note the nicest code, but it will do the trick and i don't want to program a string replacement function
+      
+      var lines = 4
+      for (var z=0; z<lines;++z) {
+          // text Body
+          ctx.font=messageBodyFont
+          ctx.fillStyle = "grey";
+          ctx.textAlign = "center";
+          ctx.lineWidth=1;
+          //ctx.strokeText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2, (yorigin+boxHeight/2)+z*messageHeight);
+          //if (typeof choiceCards[choiceIndex+1+z] != 'undefined') {
+          ctx.fillText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2-1, (yorigin+boxHeight/2)+z*messageHeight);
+          ctx.fillStyle = "black";
+          ctx.fillText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2, (yorigin+boxHeight/2)+z*messageHeight);
+        
+        }
+          //}
+          //ctx.stroke();
+      }
+
+ function drawMessage(xorigin,yorigin,messageindex) {
+  
+      var c=document.getElementById("myCanvas");
+      var ctx=c.getContext("2d");
+      var choiceIndex=0
+      ctx.imageSmoothingEnabled = false;
+      var boxWidth = 280, boxHeight = 250;
+      var messageFont="28px Helvetica"; messageBodyFont="14px Helvetica"; messageTitle=messageCards[choiceIndex];
+      var messageHeight =14*1.5
+      var ybuffer=0
+      
+      
+      //outside rectangle with fill
+      ctx.fillStyle = "#5A9BDC";
+      ctx.fillRect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=1;
+      ctx.stroke();
+      
+      //outside border
+      ctx.fillStyle = "black";
+      ctx.rect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=3;
+      ctx.stroke();
+      
+      
+      // text title
+      ctx.font=messageFont
+      ctx.fillStyle = "black";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(messageCards[choiceIndex], xorigin+boxWidth/2-2, yorigin+boxHeight/5+1);
+      ctx.fillStyle = "white";
+      ctx.fillText(messageCards[choiceIndex], xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.stroke();
+      
+      // cost here
+      ctx.font="12px courier"
+      ctx.fillStyle = "grey";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(messageCards[choiceIndex+1], xorigin+boxWidth/2-1, yorigin+boxHeight/3);
+      ctx.fillStyle = "red";
+      ctx.fillText(messageCards[choiceIndex+1], xorigin+boxWidth/2, yorigin+boxHeight/3);
+      
+      
+      // since ctx text doesnt let us do line breaks easily,
+      // were just going to push each line of text seperately from our array
+      // note the nicest code, but it will do the trick and i don't want to program a string replacement function
+      
+      var lines = 6
+      for (var z=0; z<lines;++z) {
+          // text Body
+          ctx.font=messageBodyFont
+          ctx.fillStyle = "grey";
+          ctx.textAlign = "left";
+          ctx.lineWidth=1;
+          //ctx.strokeText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2, (yorigin+boxHeight/2)+z*messageHeight);
+          //if (typeof choiceCards[choiceIndex+1+z] != 'undefined') {
+          ctx.fillText(messageCards[choiceIndex+2+z], xorigin+20, (yorigin+boxHeight/2)+z*messageHeight);
+          ctx.fillStyle = "black";
+          ctx.fillText(messageCards[choiceIndex+2+z], xorigin+20, (yorigin+boxHeight/2)+z*messageHeight);
+        
+        }
+          //}
+          //ctx.stroke();
+      }
+
+  function cyclegame() {
+      // draw the screen
+      // draw a black box for screen
+      
+      timer +=1 // used to measure gameState
+      
+      //var pause1 = delay({maxFrames:30}); // create a delay
+        //gamestate 0 = on load
+        fix_dpi();
+        ctx.fillStyle='brown';
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        
+        
+        hero.update();
+        hero.render();
+        
+        // gameStateID controls where the game is at
+        
+        if (gameStateID==0) { // animation pre game
+          if (timer>400) { gameStateID=1 }
+        }
+        
+        if (gameStateID==1) { //
+          drawScore();
+          if (timer>500) {gameStateID=2;waitForClick=0}
+        }
+        
+         if (gameStateID==2) { // pre game message
+          drawScore();
+          if (timer>600){
+            drawMessage(20,50,0);
+              if (waitForClick != 0) { gameStateID = 3; nextTimer = timer+300; waitForClick=0; gameStats.decisioncount=3 }
+          }
+        }
+        
+        // after the game is running (gamestate 3), we should cycle between TURN LOOP(3), EVENT LOOP(4), CONVERSION EVENT (5)
+        
+         if (gameStateID==3) { // turn loop goes here
+          drawScore();
+          // give 3 choices then move on
+          if (gameStats.decisioncount>0) {
+            if (timer>nextTimer){
+              drawBox(20,10,choice1ID);
+              drawBox(20,180,choice2ID);
+              if (waitForClick != 0) {
+                  
+                  if (choice==1) { gameStats.bucks+=1; choice1ID+=1;nextTimer = timer+100; gameStats.decisioncount-=1;};
+                  if (choice==2) { gameStats.energy+=1; choice2ID+=1;nextTimer = timer+100; gameStats.decisioncount-=1;};
+                  waitForClick=0;
+              }
+            }
+          } else {gameStateID = 4;nextTimer=timer+300; goToX =300, goToY=320; hero.refresh(); hero.update()}
+         }
+         
+         
+          if (gameStateID==4) { // event loop goes here
+          drawScore();
+            if (timer>nextTimer){
+            drawMessage(20,50,0);
+              if (waitForClick != 0) { gameStateID = 3; nextTimer = timer+300; waitForClick=0;gameStats.decisioncount=3; goToX =70, goToY=320;hero.refresh(); hero.update() }
+          }
+          }
+          
+    
+  }
+  
+    
+    //main loop
+    //how many cycles per frame
+      
+    setInterval(cyclegame, 3);
+    
+    </script>
+    
+    <br><center>a project by angrycyborggames</center>
+  </body>
+</html>
