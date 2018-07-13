@@ -1,0 +1,723 @@
+<!doctype html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>SIMIFY</title>
+    <style>
+      * { padding: 10; margin: 10; }
+      canvas { background: #eee; display: block; margin: 0 auto; }
+    </style>
+  </head>
+
+  <body>
+    
+  
+    
+    <canvas id="myCanvas" width ="320" height="568"></canvas>
+    
+    <script type='text/javascript' src= "processLibrary.js"></script>
+    <script type='text/javascript' src= "eventLibrary.js"></script>
+    
+    
+    <script>
+  // make things more bucks~
+  // this is a text driven simulation game about entrepreneurship
+  //
+  // you have three resources: bucks, hours, and customers.
+  //
+  // the game is a side-scroller, where your character is always walking forward. but he gets tired.
+  // at the end of each "day", the game sends X customers in to your store, and your conversion rate produces Y bucks. You then use those bucks to build up.
+  // each "day" is a CHOICE of two options. You can only pick one, and then you are redealt more.
+  // You can keep working harder and harder, and getting more anxious, or you can work less and coast.
+  // you play until you go bankrupt, or get too sad to continue, or run out of customers.
+  //
+  // the lower energy you are, the more likely bad things will happen. the higher energy, the more likely good things will happen.
+  //
+  // the goal of the game is to facilitate discussion on the impacts of the day to day on merchants
+  // its supposed to be a quick way for someone to do a day-in-the-life
+  //
+  //
+  
+    // initialize the canvas, myCanvas
+    
+    var canvas = document.getElementById("myCanvas");
+    var ctx = canvas.getContext("2d"); // this is the actual 2d rendering tool
+    
+    // global variables
+    var choiceIndex = 0; choice1ID = getRandomInt(8); choice2ID = getRandomInt(8);
+    var heroX =70, heroY =320; goToX =70, goToY=320;
+    var timer =0, clickDelay=0, clickTime = 0, nextTimer=0; choice=0
+    var choicebgcolor=["#5A9BDC","green"]
+    var gameStateID=0, waitForClick=0
+    var customertospawn=3, visits=0, sales=0, roundvisits=0, roundsales=0
+
+    // gameStats is the object that holds player data
+    var gameStats = {
+      week: 1,
+      bucks: 1,
+      energy: 5,
+      traffic: 1,
+      conversion: 25,
+      level: 1,
+      decisioncount:3,
+      gameState: 0, // 0 is on loadup, 1 is start of round, 2 is end of round, 3 is cleanup
+      };
+    
+    // listeners for user input depending which inputs i add
+    
+    document.addEventListener("mousemove", function(event) {
+      // just watches mouse movement
+        relativeX = event.clientX - myCanvas.offsetLeft;
+        relativeY = event.clientY - myCanvas.offsetTop;
+        
+        //var relativeY = e.clientY - canvasoffsetTop;
+    }, false);
+    
+    document.addEventListener("click",function(event) {
+      
+      var clickX = Math.floor(relativeX)
+      var clickY = Math.floor(relativeY)
+      var clickTime = timer
+      var click = 0
+      
+      // this just places their click on a screen and converts it to an integer
+      
+      if (clickY<165) { // option 1
+        click=1;
+        choiceIndex+=8;
+      } else if (clickY<340 && clickY>180) { // option 2
+        click=2;
+        choiceIndex+=8;
+      } else {
+        click=3; // aywhere else
+      }
+      mySound.stop()
+      mySound.play()
+      myMusic.play()
+      waitForClick = 1;
+      choice=click
+      
+    }, false);
+  
+  //load images / resources -- move to a library
+    
+   var heroImage = new Image();
+   var directoryimg = "img/"
+   heroImage.src = directoryimg+"charset1.png"
+
+   var hero1Image = new Image();
+   var directoryimg = "img/"
+   hero1Image.src = directoryimg+"charset2a.png"
+
+   var hero2Image = new Image();
+   var directoryimg = "img/"
+   hero2Image.src = directoryimg+"charset3.png"
+   
+  var customerImage = new Image();
+   var directoryimg = "img/"
+   customerImage.src = directoryimg+"kramer_sprites1.png"
+
+  
+  function delay(options) {
+      
+      var that = {}
+        that.maxFrames = options.maxFrames
+        tickCount = 0
+        
+          that.update = function(){
+            tickCount += 1;
+            var percentage = tickCount/that.maxFrames;
+               if (tickCount > that.maxFrames) {
+          	    tickCount = 0;
+               }
+        }
+        
+        return that;
+  }
+  
+  
+  //console.log(pause1)
+  
+  function sprite(options) {
+      
+      var that = {}
+      
+        frameIndex = 0,
+        tickCount = 0,
+        movementtickCount=0,
+        //ticksPerFrame = options.ticksPerFrame || 0;
+        ticksPerFrameMovement = options.ticksPerFrameMovement || 0;
+        numberOfFrames = options.numberOfFrames || 1;
+        
+        that.ticksPerFrame = options.ticksPerFrame
+        that.context = options.context;
+        that.width = options.width;
+        that.height = options.height;
+        that.realwidth = options.realwidth;
+        that.realheight = options.realheight;
+        that.image = options.image;
+        that.loop = options.loop;
+        that.xpos = options.xpos;
+        that.ypos = options.ypos;
+        that.xorigin = options.xorigin;
+        that.yorigin = options.yorigin;
+        that.movementtickCount = 0
+        that.speed = options.speed
+        
+      that.refresh = function(){
+          that.xorigin = that.xpos
+          that.yorigin = that.ypos
+          that.movementtickCount=0
+      }
+        
+      that.update = function() {
+        tickCount += 1;
+        that.movementtickCount +=that.speed;
+        var percentage = that.movementtickCount/ticksPerFrameMovement;
+        
+        that.xpos = interpolate(that.xorigin,goToX,that.movementtickCount/ticksPerFrameMovement);
+        that.ypos = interpolate(that.yorigin,goToY,that.movementtickCount/ticksPerFrameMovement);
+        
+        
+        if (that.movementtickCount > ticksPerFrameMovement) {
+            that.refresh()
+            that.movementtickCount = 0;
+            
+          }
+        
+        if (tickCount > that.ticksPerFrame) {
+          	tickCount = 0;
+              
+              if (frameIndex <numberOfFrames-1) {
+                frameIndex += 1;
+              } else if (that.loop) {
+                frameIndex = 0;
+              }
+            
+          }
+        
+      }
+      
+      that.render = function() {
+            //draw the graphic
+                ctx.imageSmoothingEnabled = false;
+                that.context.drawImage(
+                that.image,
+                frameIndex*that.width,
+                0,
+                that.width,
+                that.height,
+                that.xpos,
+                that.ypos,
+                that.realwidth,
+                that.realheight);
+                
+      };
+   
+   return that;
+   
+  }
+
+  // variables for draws
+  // each stores as an object
+  
+  var hero = sprite({
+    context: canvas.getContext("2d"),
+    width: 50,
+    height: 50,
+    xpos: 0,
+    ypos: 0,
+    xorigin:0,//-300,
+    yorigin:0, //goToY,
+    realwidth: 200,
+    realheight: 200,
+    image: heroImage,
+    ticksPerFrame: 60,
+    ticksPerFrameMovement:60,
+    movementtickCount: 0,
+    numberOfFrames: 6,
+    loop: 1,
+    speed: .25,
+    });
+    
+    var customer = sprite({
+    context: canvas.getContext("2d"),
+    width: 38,
+    height: 50,
+    xpos: getRandomInt(200)+25,
+    ypos: getRandomInt(200)+200,
+    xorigin: getRandomInt(200)+25,//,
+    yorigin: getRandomInt(200)+200,
+    realwidth: getRandomInt(50)+75,
+    realheight: getRandomInt(50)+75,
+    image: customerImage,
+    ticksPerFrame: 80,
+    ticksPerFrameMovement:60,
+    movementtickCount: 0,
+    numberOfFrames: 4,
+    loop: 1,
+    speed: .25,
+    });
+   
+  var customer1 = sprite({
+    context: canvas.getContext("2d"),
+    width: 38,
+    height: 50,
+    xpos: getRandomInt(200)+25,
+    ypos: getRandomInt(200)+200,
+    xorigin: getRandomInt(200)+25,//,
+    yorigin: getRandomInt(200)+200,
+    realwidth: getRandomInt(50)+75,
+    realheight: getRandomInt(50)+75,
+    image: customerImage,
+    ticksPerFrame: 40,
+    ticksPerFrameMovement:60,
+    movementtickCount: 0,
+    numberOfFrames: 4,
+    loop: 1,
+    speed: .25,
+    });
+    
+  var customer2 = sprite({
+    context: canvas.getContext("2d"),
+    width: 38,
+    height: 50,
+    xpos: getRandomInt(200)+25,
+    ypos: getRandomInt(200)+200,
+    xorigin: getRandomInt(200)+25,//,
+    yorigin: getRandomInt(200)+200,
+    realwidth: getRandomInt(50)+75,
+    realheight: getRandomInt(50)+75,
+    image: customerImage,
+    ticksPerFrame: 40,
+    ticksPerFrameMovement:60,
+    movementtickCount: 0,
+    numberOfFrames: 4,
+    loop: 1,
+    speed: .25,
+    });
+  
+  var customer3 = sprite({
+    context: canvas.getContext("2d"),
+    width: 38,
+    height: 50,
+    xpos: getRandomInt(200)+25,
+    ypos: getRandomInt(200)+200,
+    xorigin: getRandomInt(200)+25,//,
+    yorigin: getRandomInt(200)+200,
+    realwidth: getRandomInt(50)+75,
+    realheight: getRandomInt(50)+75,
+    image: customerImage,
+    ticksPerFrame: 40,
+    ticksPerFrameMovement:60,
+    movementtickCount: 0,
+    numberOfFrames: 4,
+    loop: 1,
+    speed: .25,
+    });
+  
+  var customer4 = sprite({
+    context: canvas.getContext("2d"),
+    width: 38,
+    height: 50,
+    xpos: getRandomInt(200)+25,
+    ypos: getRandomInt(200)+200,
+    xorigin: getRandomInt(200)+25,//,
+    yorigin: getRandomInt(200)+200,//getRandomInt(300),//goToY,
+    realwidth: getRandomInt(50)+75,
+    realheight: getRandomInt(50)+75,
+    image: customerImage,
+    ticksPerFrame: 40,
+    ticksPerFrameMovement:60,
+    movementtickCount: 0,
+    numberOfFrames: 4,
+    loop: 1,
+    speed: .25,
+    });
+    
+  function calculateRoundScore() {
+    // calculate the store's performance
+    // bucks(0-99), energy(-9-+9), traffic(0-9), conversion (1-5)%
+    // visits = (traffic*10, +energy) *90-110%
+    // conversion = visits * conversion
+    var tempVisits = visits
+    tempVisits = gameStats.traffic * (getRandomInt(6)+17)
+    tempVisits+=gameStats.energy + gameStats.week
+    tempVisits*=(getRandomInt(30)+80)
+    tempVisits/=100
+    //console.log(tempVisits)
+    var tempConversion = gameStats.conversion/10
+    sales = Math.round((tempVisits * tempConversion/100))
+    visits = Math.round(tempVisits)
+    gameStats.bucks -=1
+    //console.log(sales)
+  }
+    
+  function drawScore() {
+    var  scoreHeight=50; scoreYoffset = canvas.height-scoreHeight;
+    // draw the score bar at the bottom of the screen
+    //outside rectangle with fill
+      ctx.fillStyle = "black";
+      ctx.fillRect(0,scoreYoffset,canvas.width,scoreHeight);
+      ctx.lineWidth=1;
+      ctx.strokeStyle="white";
+      ctx.strokeRect(0,scoreYoffset,canvas.width,scoreHeight);
+      ctx.stroke();
+      ctx.strokeStyle="black";
+    
+    
+      ctx.font="10pt courier"
+      ctx.fillStyle = "white";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      ctx.fillText("Bucks:"+gameStats.bucks+ " | Energy:"+gameStats.energy+" | Traffic:"+gameStats.traffic, canvas.width/2, scoreYoffset+scoreHeight/2-5);
+      ctx.stroke();
+      
+      ctx.font="10pt courier"
+      ctx.fillStyle = "white";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      ctx.fillText("WEEK "+gameStats.week, canvas.width/2, scoreYoffset+15+scoreHeight/2);
+      ctx.stroke();
+  }
+  
+  function drawBox(xorigin,yorigin,cardindex,choiceid) {
+  
+      var c=document.getElementById("myCanvas");
+      var ctx=c.getContext("2d");
+      var choiceIndex=cardindex*10
+      ctx.imageSmoothingEnabled = false;
+      var boxWidth = 280, boxHeight = 155;
+      var messageFont="22px Helvetica"; messageBodyFont="14px Helvetica"; messageTitle=choiceCards[choiceIndex];
+      var messageHeight =14*1.5
+      var ybuffer=0
+      
+      //outside rectangle with fill
+      ctx.fillStyle = choicebgcolor[0]
+      ctx.fillRect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=1;
+      ctx.stroke();
+      
+      //outside border
+      ctx.fillStyle = "black";
+      ctx.rect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=3;
+      ctx.stroke();
+      
+      
+      // text title
+      ctx.font=messageFont
+      ctx.fillStyle = "black";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(messageTitle, xorigin+boxWidth/2-2, yorigin+boxHeight/5+1);
+      ctx.fillStyle = "white";
+      ctx.fillText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.stroke();
+      
+      // cost here
+      ctx.font="13px Helvetica"
+      ctx.fillStyle = "black";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(choiceCards[choiceIndex+5], xorigin+boxWidth/2-1, yorigin+boxHeight/3);
+      ctx.fillStyle = "white";
+      ctx.fillText(choiceCards[choiceIndex+5], xorigin+boxWidth/2, yorigin+boxHeight/3);
+      
+      
+      // since ctx text doesnt let us do line breaks easily,
+      // were just going to push each line of text seperately from our array
+      // note the nicest code, but it will do the trick and i don't want to program a string replacement function
+      
+      var lines = 4
+      for (var z=0; z<lines;++z) {
+          // text Body
+          ctx.font=messageBodyFont
+          ctx.fillStyle = "grey";
+          ctx.textAlign = "center";
+          ctx.lineWidth=1;
+          //ctx.strokeText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2, (yorigin+boxHeight/2)+z*messageHeight);
+          //if (typeof choiceCards[choiceIndex+1+z] != 'undefined') {
+          ctx.fillText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2-1, (yorigin+boxHeight/2)+z*messageHeight);
+          ctx.fillStyle = "black";
+          ctx.fillText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2, (yorigin+boxHeight/2)+z*messageHeight);
+        
+        }
+          //}
+          //ctx.stroke();
+      }
+
+ function drawMessage(xorigin,yorigin,messageindex) {
+  
+      var c=document.getElementById("myCanvas");
+      var ctx=c.getContext("2d");
+      var choiceIndex=0
+      ctx.imageSmoothingEnabled = false;
+      var boxWidth = 290, boxHeight = 250;
+      var messageFont="40px Helvetica"; messageBodyFont="14px Helvetica"; messageTitle=messageCards[choiceIndex];
+      var messageHeight =14*1.5
+      var ybuffer=0
+      
+      
+      //outside rectangle with fill
+      ctx.fillStyle = "#5A9BDC";
+      ctx.fillRect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=1;
+      ctx.stroke();
+      
+      //outside border
+      ctx.fillStyle = "black";
+      ctx.rect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=3;
+      ctx.stroke();
+      
+      
+      // text title
+      ctx.font=messageFont
+      ctx.fillStyle = "black";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(messageCards[choiceIndex], xorigin+boxWidth/2-2, yorigin+boxHeight/5+1);
+      ctx.fillStyle = "white";
+      ctx.fillText(messageCards[choiceIndex], xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.stroke();
+      
+      // cost here
+      ctx.font="12px Arial"
+      ctx.fillStyle = "grey";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(messageCards[choiceIndex+1], xorigin+boxWidth/2-1, yorigin+boxHeight/3);
+      ctx.fillStyle = "red";
+      ctx.fillText(messageCards[choiceIndex+1], xorigin+boxWidth/2, yorigin+boxHeight/3);
+      
+      
+      // since ctx text doesnt let us do line breaks easily,
+      // were just going to push each line of text seperately from our array
+      // note the nicest code, but it will do the trick and i don't want to program a string replacement function
+      
+      var lines = 6
+      for (var z=0; z<lines;++z) {
+          // text Body
+          ctx.font=messageBodyFont
+          ctx.fillStyle = "grey";
+          ctx.textAlign = "left";
+          ctx.lineWidth=1;
+          //ctx.strokeText(choiceCards[choiceIndex+1+z], xorigin+boxWidth/2, (yorigin+boxHeight/2)+z*messageHeight);
+          //if (typeof choiceCards[choiceIndex+1+z] != 'undefined') {
+          ctx.fillText(messageCards[choiceIndex+2+z], xorigin+20, (yorigin+boxHeight/2)+z*messageHeight);
+          ctx.fillStyle = "black";
+          ctx.fillText(messageCards[choiceIndex+2+z], xorigin+20, (yorigin+boxHeight/2)+z*messageHeight);
+        
+        }
+          //}
+          //ctx.stroke();
+      }
+
+ function drawConversion(xorigin,yorigin) {
+  
+      var c=document.getElementById("myCanvas");
+      var ctx=c.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      var boxWidth = 280, boxHeight = 150;
+      var messageFont="28px Helvetica"; messageBodyFont="14px Helvetica"; messageTitle="END OF WEEK "+gameStats.week+"!";
+      var messageHeight =14*1.5
+      var ybuffer=0
+      
+      
+      //outside rectangle with fill
+      ctx.fillStyle = "#5A9BDC";
+      ctx.fillRect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=1;
+      ctx.stroke();
+      
+      //outside border
+      ctx.fillStyle = "black";
+      ctx.rect(xorigin,yorigin,boxWidth,boxHeight);
+      ctx.lineWidth=3;
+      ctx.stroke();
+      
+      
+      // text title
+      ctx.font=messageFont
+      ctx.fillStyle = "black";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillText(messageTitle, xorigin+boxWidth/2-2, yorigin+boxHeight/5+1);
+      ctx.fillStyle = "white";
+      ctx.fillText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.stroke();
+      
+      // cost here
+      ctx.font="18px Helvetica"
+      ctx.fillStyle = "grey";
+      ctx.textAlign = "center";
+      ctx.lineWidth=3;
+      //ctx.strokeText(messageTitle, xorigin+boxWidth/2, yorigin+boxHeight/5);
+      ctx.fillStyle = "red";
+      ctx.fillText("", xorigin+boxWidth/2, yorigin+boxHeight/3);
+      
+      ctx.font=messageBodyFont
+      ctx.fillStyle = "grey";
+      ctx.textAlign = "left";
+      ctx.lineWidth=1;
+    
+     ctx.fillStyle = "grey";
+      ctx.fillText("Weekly store visits: "+ roundvisits, xorigin+20, (yorigin+boxHeight/2)+0*messageHeight);
+      ctx.fillStyle = "black";
+      ctx.fillText("Weekly store visits: "+ roundvisits, xorigin+20, (yorigin+boxHeight/2)+0*messageHeight);
+      ctx.fillStyle = "grey";
+      ctx.fillText("Weekly bucks generated: "+ roundsales, xorigin+20, (yorigin+boxHeight/2)+1*messageHeight);
+      ctx.fillStyle = "black";
+      ctx.fillText("Weekly bucks generated: "+ roundsales, xorigin+20, (yorigin+boxHeight/2)+1*messageHeight);
+      ctx.fillStyle = "grey";
+      ctx.fillText("Store conversion rate: "+gameStats.conversion/10+"%", xorigin+20, (yorigin+boxHeight/2)+2*messageHeight);
+      ctx.fillStyle = "black";
+      ctx.fillText("Store conversion rate: "+gameStats.conversion/10+"%", xorigin+20, (yorigin+boxHeight/2)+2*messageHeight);
+        }
+
+ function calcChoice(id){
+  //bucks, energy, traffic, conversion
+  var calcBucks = 0, calcEnergy =0, calcTraffic=0, calcConversion=0
+  
+  if (id == 1) {
+    calcBucks = choiceCards[choice1ID*10+6];
+    calcEnergy = choiceCards[choice1ID*10+7];
+    calcTraffic = choiceCards[choice1ID*10+8];
+    calcConversion = choiceCards[choice1ID*10+9];
+  }
+  if (id == 2) {
+    calcBucks = choiceCards[choice2ID*10+6];
+    calcEnergy = choiceCards[choice2ID*10+7];
+    calcTraffic = choiceCards[choice2ID*10+8];
+    calcConversion = choiceCards[choice2ID*10+9];
+  }
+  
+  console.log(calcConversion)
+  
+  //hero.ticksPerFrame = interpolate(60,0,(Math.min(0,(gameStats.energy/9))));
+  
+  gameStats.bucks+=parseInt(calcBucks)
+  gameStats.energy+=parseInt(calcEnergy)
+  gameStats.traffic+=parseInt(calcTraffic)
+  gameStats.conversion+=parseInt(calcConversion)
+  
+  
+  return
+}
+
+function randomizeChoice(){
+  if (gameStats.week < 2) { var max = 15; }
+  if (gameStats.week > 1) { var max = 19;}
+  
+  choice1ID = getRandomInt(max);
+  choice2ID = getRandomInt(max);
+  choice1ID = getRandomInt(max);
+  choice2ID = getRandomInt(max);
+  choice1ID = getRandomInt(max);
+  choice2ID = getRandomInt(max);
+  
+  if (choice1ID == choice2ID && choice1ID != 19) {
+    choice2ID += 1;
+  }
+    if (choice1ID == choice2ID && choice1ID == 19) {
+    choice2ID -= 1;
+  }
+}
+  function cyclegame() {
+      // draw the screen
+      // draw a black box for screen
+      
+      
+      
+      timer +=1 // used to measure gameState
+      
+      //var pause1 = delay({maxFrames:30}); // create a delay
+        //gamestate 0 = on load
+        fix_dpi();
+        ctx.fillStyle='brown';
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        
+        hero.update();
+        hero.render();
+        
+        
+        // gameStateID controls where the game is at
+        
+        if (gameStateID==0) { // animation pre game
+          if (timer>400) { gameStateID=1 }
+        }
+        
+        if (gameStateID==1) { //
+          drawScore();
+          if (timer>500) {gameStateID=2;waitForClick=0}
+        }
+        
+         if (gameStateID==2) { // pre game message
+          drawScore();
+          if (timer>600){
+            drawMessage(20,50,0);
+              if (waitForClick != 0) { gameStateID = 3; nextTimer = timer+300; waitForClick=0; randomizeChoice(); gameStats.decisioncount=3 }
+          }
+        }
+        
+        // after the game is running (gamestate 3), we should cycle between TURN LOOP(3), EVENT LOOP(4), CONVERSION EVENT (5)
+        
+         if (gameStateID==3) { // turn loop goes here
+          drawScore();
+          // give 3 choices then move on
+          if (gameStats.decisioncount>0) {
+            if (timer>nextTimer){
+              hero.image=heroImage
+              drawBox(20,10,choice1ID,1);
+              drawBox(20,180,choice2ID,2);
+              if (waitForClick != 0) {
+                  
+                  if (choice==1) { calcChoice(1); randomizeChoice();nextTimer = timer+250; gameStats.decisioncount-=1; hero.image=hero2Image, calculateRoundScore(); roundvisits=visits, roundsales=sales};
+                  if (choice==2) { calcChoice(2); randomizeChoice();nextTimer = timer+250; gameStats.decisioncount-=1; hero.image=hero2Image, calculateRoundScore(); roundvisits=visits, roundsales=sales};
+                  waitForClick=0;
+              }
+            }
+          } else {gameStateID = 4;waitForClick=0;nextTimer=timer+300; goToX =300, goToY=320; hero.refresh(); hero.update();}
+         }
+         
+         
+          if (gameStateID==4) { // store visits time
+          drawScore();
+            if (timer>nextTimer) {
+              
+                if (gameStats.traffic > 1) {customer.render(); }
+                if (gameStats.traffic > 3) {customer1.render(); }
+                if (gameStats.traffic > 5) {customer2.render(); }
+                if (gameStats.traffic > 7) {customer3.render(); }
+                if (gameStats.traffic > 9) {customer4.render(); }
+              
+              drawConversion(20,10);
+            }
+            
+            hero.image=hero1Image
+          
+              if (waitForClick != 0) { waitForClick=0; gameStats.bucks+=roundsales; gameStateID = 3; nextTimer = timer+300; waitForClick=0; gameStats.energy+=2; gameStats.decisioncount=Math.max(1,(gameStats.energy/2)); gameStats.week+=1; goToX =70, goToY=320;hero.refresh(); hero.update()}
+          }
+          
+          
+    
+  }
+  
+    
+    //main loop
+    //how many cycles per frame
+      
+    setInterval(cyclegame, 3);
+    
+    </script>
+    
+    <br><center>a project by adam</center>
+  </body>
+</html>
